@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>精美图片上传预览</title>
+    <script src="https://aisearch-task.bj.bcebos.com/static/tailwindcss-3.4.17.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei', sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 0%, #f0f9ff 50%, #e0f2fe 100%);
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* 背景装饰光斑 */
+        .bg-blob {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(100px);
+            opacity: 0.4;
+            z-index: 0;
+            animation: float 20s ease-in-out infinite;
+        }
+
+        .blob-1 {
+            width: 500px;
+            height: 500px;
+            background: #93c5fd;
+            top: -200px;
+            left: -100px;
+            animation-delay: 0s;
+        }
+
+        .blob-2 {
+            width: 400px;
+            height: 400px;
+            background: #a5f3fc;
+            bottom: -150px;
+            right: -100px;
+            animation-delay: -5s;
+        }
+
+        .blob-3 {
+            width: 350px;
+            height: 350px;
+            background: #c4b5fd;
+            top: 40%;
+            right: 20%;
+            animation-delay: -10s;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(30px, -30px) scale(1.05); }
+            66% { transform: translate(-20px, 20px) scale(0.95); }
+        }
+
+        /* 玻璃效果基础类 */
+        .glass {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.1);
+        }
+
+        .glass-strong {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            box-shadow: 0 16px 64px rgba(31, 38, 135, 0.15);
+        }
+
+        /* 上传区域样式 */
+        .upload-area {
+            transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+            border: 2px dashed rgba(102, 126, 234, 0.3);
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        .upload-area:hover, .upload-area.drag-over {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.05);
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(102, 126, 234, 0.15);
+        }
+
+        .upload-area.drag-over {
+            border-style: solid;
+            background: rgba(102, 126, 234, 0.1);
+            transform: scale(1.01);
+        }
+
+        /* 上传图标动画 */
+        .upload-icon {
+            transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        .upload-area:hover .upload-icon {
+            transform: translateY(-5px) scale(1.05);
+            color: #667eea;
+        }
+
+        .upload-area.drag-over .upload-icon {
+            transform: translateY(-10px) scale(1.1);
+            color: #667eea;
+        }
+
+        /* 图片卡片 */
+        .image-card {
+            animation: cardFadeIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+            opacity: 0;
+            transform: translateY(20px) scale(0.95);
+            transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        .image-card:hover {
+            transform: translateY(-4px) scale(1.02);
+            box-shadow: 0 20px 50px rgba(31, 38, 135, 0.18);
+        }
+
+        @keyframes cardFadeIn {
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        /* 为每个卡片设置延迟，实现错开入场效果 */
+        .image-card:nth-child(1) { animation-delay: 0.05s; }
+        .image-card:nth-child(2) { animation-delay: 0.1s; }
+        .image-card:nth-child(3) { animation-delay: 0.15s; }
+        .image-card:nth-child(4) { animation-delay: 0.2s; }
+        .image-card:nth-child(5) { animation-delay: 0.25s; }
+        .image-card:nth-child(6) { animation-delay: 0.3s; }
+        .image-card:nth-child(7) { animation-delay: 0.35s; }
+        .image-card:nth-child(8) { animation-delay: 0.4s; }
+
+        /* 删除按钮 */
+        .delete-btn {
+            opacity: 0;
+            transform: scale(0.8);
+            transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        .image-card:hover .delete-btn {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        .delete-btn:hover {
+            background: #ef4444;
+            transform: scale(1.1);
+        }
+
+        /* 按钮样式 */
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-primary.clicked {
+            transform: scale(0.96);
+            opacity: 0.9;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.8);
+            color: #64748b;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        .btn-secondary:hover {
+            background: white;
+            color: #334155;
+            border-color: rgba(148, 163, 184, 0.4);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+
+        /* 模态框 */
+        .modal {
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        .modal.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-content {
+            transform: scale(0.9);
+            transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        .modal.active .modal-content {
+            transform: scale(1);
+        }
+
+        /* 密码错误提示动画 */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-8px); }
+            40%, 80% { transform: translateX(8px); }
+        }
+
+        .shake {
+            animation: shake 0.4s ease-in-out;
+        }
+
+        /* 滚动条美化 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(102, 126, 234, 0.3);
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(102, 126, 234, 0.5);
+        }
+
+        /* 空状态 */
+        .empty-state {
+            transition: all 0.3s ease;
+        }
+
+        /* 密码输入框样式 */
+        .password-input {
+            transition: all 0.2s ease;
+        }
+
+        .password-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+        }
+    </style>
+</head>
+<body class="py-8 px-4 md:py-12">
+    <!-- 背景装饰 -->
+    <div class="bg-blob blob-1"></div>
+    <div class="bg-blob blob-2"></div>
+    <div class="bg-blob blob-3"></div>
+
+    <!-- 主容器 -->
+    <div class="relative z-10 max-w-5xl mx-auto">
+        <!-- 头部卡片 -->
+        <div class="glass-strong rounded-3xl p-6 md:p-8 mb-6">
+            <div class="text-center mb-6">
+                <h1 class="text-[clamp(1.8rem,4vw,2.8rem)] font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2 leading-tight">
+                    图片上传预览
+                </h1>
+                <p class="text-slate-500 text-base md:text-lg">拖拽或点击上传图片，即时预览，所有操作均在本地完成</p>
+            </div>
+
+            <!-- 统计信息栏 -->
+            <div class="flex flex-wrap justify-between items-center gap-4 mb-6" id="stats-bar" style="display: none;">
+                <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-50 text-indigo-700">
+                        <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                        </svg>
+                        <span class="font-medium"><span id="image-count">0</span> 张图片</span>
+                    </div>
+                    <div class="flex items-center gap-2 px-4 py-2 rounded-full bg-purple-50 text-purple-700">
+                        <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        <span class="font-medium">总大小 <span id="total-size">0 KB</span></span>
+                    </div>
+                </div>
+                <button id="clear-all" class="btn-secondary px-4 py-2 rounded-xl font-medium flex items-center gap-2">
+                    <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
+                    清空全部
+                </button>
+            </div>
+
+            <!-- 图片预览区域（调整到上方） -->
+            <div id="preview-container" class="mb-6">
+                <!-- 空状态提示 -->
+                <div id="empty-state" class="glass rounded-2xl p-12 text-center empty-state">
+                    <div class="w-24 h-24 mx-auto mb-4 text-slate-300">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-medium text-slate-500 mb-1">还没有上传任何图片</h3>
+                    <p class="text-slate-400">上传的图片将在这里展示预览</p>
+                </div>
+
+                <!-- 图片预览网格 -->
+                <div id="preview-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 md:gap-5" style="display: none;">
+                    <!-- 图片卡片将通过JS动态插入 -->
+                </div>
+            </div>
+
+            <!-- 上传区域（调整到下方） -->
+            <div id="upload-area" class="upload-area rounded-2xl p-8 md:p-12 text-center cursor-pointer">
+                <input type="file" id="file-input" accept="image/*" multiple class="hidden">
+                <div class="upload-icon w-20 h-20 mx-auto mb-4 text-indigo-400">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                    </svg>
+                </div>
+                <h3 class="text-xl font-semibold text-slate-700 mb-2">拖拽图片到此处，或点击选择</h3>
+                <p class="text-slate-500 mb-4">支持 JPG、PNG、GIF、WebP 等常见格式，可批量上传</p>
+                <button type="button" id="select-btn" class="btn-primary px-6 py-3 rounded-xl text-white font-medium flex items-center gap-2 mx-auto">
+                    选择图片
+                </button>
+                <p id="click-tip" class="text-sm text-indigo-600 mt-2 h-5 opacity-0 transition-opacity duration-200">正在打开文件选择窗口...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 大图预览模态框 -->
+    <div id="image-modal" class="modal fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+        <button id="close-modal" class="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/20 backdrop-blur-md text-white flex items-center justify-center hover:bg-white/30 transition-all duration-200">
+            <svg class="w-[24px] h-[24px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+        </button>
+        <div class="modal-content max-w-5xl max-h-[90vh]">
+            <img id="modal-image" src="" alt="预览大图" class="max-w-full max-h-[90vh] rounded-xl shadow-2xl object-contain">
+        </div>
+    </div>
+
+    <!-- 密码验证模态框 -->
+    <div id="password-modal" class="modal fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div class="modal-content glass-strong rounded-3xl p-8 w-full max-w-md">
+            <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                </svg>
+            </div>
+            <h3 class="text-xl font-bold text-slate-800 text-center mb-2">需要访问密码</h3>
+            <p class="text-slate-500 text-center mb-6">请输入上传密码以继续操作</p>
+            
+            <div id="password-form">
+                <input type="password" id="password-input" class="password-input w-full px-4 py-3 rounded-xl border border-slate-200 bg-white/80 text-slate-700 text-center text-lg tracking-widest mb-3" placeholder="请输入密码" autocomplete="off">
+                <p id="password-error" class="text-red-500 text-sm text-center mb-4 h-5 opacity-0 transition-opacity duration-200">密码错误，请重新输入</p>
+                <div class="flex gap-3">
+                    <button id="password-cancel" class="flex-1 btn-secondary px-4 py-3 rounded-xl font-medium">取消</button>
+                    <button id="password-confirm" class="flex-1 btn-primary px-4 py-3 rounded-xl text-white font-medium">确认</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 配置
+        const UPLOAD_PASSWORD = '11140551';
+        let isVerified = false;
+
+        // DOM元素获取
+        const uploadArea = document.getElementById('upload-area');
+        const fileInput = document.getElementById('file-input');
+        const previewGrid = document.getElementById('preview-grid');
+        const emptyState = document.getElementById('empty-state');
+        const statsBar = document.getElementById('stats-bar');
+        const imageCount = document.getElementById('image-count');
+        const totalSize = document.getElementById('total-size');
+        const clearAllBtn = document.getElementById('clear-all');
+        const modal = document.getElementById('image-modal');
+        const modalImage = document.getElementById('modal-image');
+        const closeModal = document.getElementById('close-modal');
+        
+        // 密码模态框元素
+        const passwordModal = document.getElementById('password-modal');
+        const passwordInput = document.getElementById('password-input');
+        const passwordError = document.getElementById('password-error');
+        const passwordCancel = document.getElementById('password-cancel');
+        const passwordConfirm = document.getElementById('password-confirm');
+        const passwordForm = document.getElementById('password-form');
+
+        // 存储待处理的文件和待执行的回调
+        let pendingFiles = null;
+        let pendingCallback = null;
+
+        // 存储已上传的图片数据
+        let images = [];
+
+        // 格式化文件大小
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            else if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            else return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        // 更新统计信息
+        function updateStats() {
+            const count = images.length;
+            const size = images.reduce((sum, img) => sum + img.size, 0);
+            
+            imageCount.textContent = count;
+            totalSize.textContent = formatSize(size);
+
+            if (count > 0) {
+                emptyState.style.display = 'none';
+                previewGrid.style.display = 'grid';
+                statsBar.style.display = 'flex';
+            } else {
+                emptyState.style.display = 'block';
+                previewGrid.style.display = 'none';
+                statsBar.style.display = 'none';
+            }
+        }
+
+        // 处理文件
+        function handleFiles(files) {
+            const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
+            
+            imageFiles.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const imageData = {
+                        id: Date.now() + Math.random(),
+                        url: e.target.result,
+                        name: file.name,
+                        size: file.size
+                    };
+                    images.push(imageData);
+                    renderImage(imageData);
+                    updateStats();
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // 渲染单个图片卡片
+        function renderImage(imageData) {
+            const card = document.createElement('div');
+            card.className = 'image-card glass rounded-2xl overflow-hidden group relative cursor-pointer';
+            card.dataset.id = imageData.id;
+            
+            card.innerHTML = `
+                <div class="aspect-square overflow-hidden">
+                    <img src="${imageData.url}" alt="${imageData.name}" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110">
+                </div>
+                <button class="delete-btn absolute top-3 right-3 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center" data-id="${imageData.id}">
+                    <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+                <div class="p-3">
+                    <p class="text-sm font-medium text-slate-700 truncate" title="${imageData.name}">${imageData.name}</p>
+                    <p class="text-xs text-slate-500 mt-1">${formatSize(imageData.size)}</p>
+                </div>
+            `;
+
+            // 点击图片打开大图
+            card.querySelector('img').addEventListener('click', () => {
+                modalImage.src = imageData.url;
+                modal.classList.add('active');
+                document.body.style.overflow = 'hidden';
+            });
+
+            // 点击删除按钮
+            card.querySelector('.delete-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteImage(imageData.id);
+            });
+
+            previewGrid.appendChild(card);
+        }
+
+        // 删除图片
+        function deleteImage(id) {
+            images = images.filter(img => img.id !== id);
+            const card = previewGrid.querySelector(`[data-id="${id}"]`);
+            if (card) {
+                card.style.opacity = '0';
+                card.style.transform = 'scale(0.8)';
+                setTimeout(() => {
+                    card.remove();
+                    updateStats();
+                }, 200);
+            }
+        }
+
+        // 清空所有图片
+        function clearAll() {
+            images = [];
+            previewGrid.innerHTML = '';
+            updateStats();
+        }
+
+        // 显示密码模态框
+        function showPasswordModal(files, callback) {
+            pendingFiles = files;
+            pendingCallback = callback;
+            passwordInput.value = '';
+            passwordError.style.opacity = '0';
+            passwordModal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+            setTimeout(() => passwordInput.focus(), 100);
+        }
+
+        // 隐藏密码模态框
+        function hidePasswordModal() {
+            passwordModal.classList.remove('active');
+            document.body.style.overflow = '';
+            pendingFiles = null;
+            pendingCallback = null;
+        }
+
+        // 验证密码
+        function verifyPassword() {
+            const input = passwordInput.value;
+            if (input === UPLOAD_PASSWORD) {
+                isVerified = true;
+                hidePasswordModal();
+                // 执行待处理的回调
+                if (pendingCallback) {
+                    pendingCallback();
+                }
+            } else {
+                // 密码错误，显示提示并抖动
+                passwordError.style.opacity = '1';
+                passwordForm.classList.add('shake');
+                passwordInput.value = '';
+                setTimeout(() => {
+                    passwordForm.classList.remove('shake');
+                }, 400);
+                passwordInput.focus();
+            }
+        }
+
+        // 事件监听
+        // 选择图片按钮
+        const selectBtn = document.getElementById('select-btn');
+        const clickTip = document.getElementById('click-tip');
+        selectBtn.setAttribute('aria-pressed', 'false');
+        selectBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            selectBtn.setAttribute('aria-pressed', 'true');
+            selectBtn.classList.add('clicked');
+            clickTip.style.opacity = '1';
+            
+            setTimeout(() => {
+                selectBtn.setAttribute('aria-pressed', 'false');
+                selectBtn.classList.remove('clicked');
+                clickTip.style.opacity = '0';
+            }, 1500);
+
+            if (isVerified) {
+                fileInput.click();
+            } else {
+                showPasswordModal(null, () => fileInput.click());
+            }
+        });
+
+        // 点击上传区域触发文件选择
+        uploadArea.addEventListener('click', () => {
+            if (isVerified) {
+                fileInput.click();
+            } else {
+                showPasswordModal(null, () => fileInput.click());
+            }
+        });
+
+        // 文件选择变化
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+            fileInput.value = ''; // 重置，允许重复选择相同文件
+        });
+
+        // 拖拽事件
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('drag-over');
+        });
+
+        uploadArea.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('drag-over');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('drag-over');
+            
+            const files = e.dataTransfer.files;
+            if (isVerified) {
+                handleFiles(files);
+            } else {
+                showPasswordModal(files, () => handleFiles(pendingFiles));
+            }
+        });
+
+        // 密码模态框事件
+        passwordCancel.addEventListener('click', hidePasswordModal);
+        passwordConfirm.addEventListener('click', verifyPassword);
+        
+        passwordInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                verifyPassword();
+            }
+        });
+
+        passwordModal.addEventListener('click', (e) => {
+            if (e.target === passwordModal) {
+                hidePasswordModal();
+            }
+        });
+
+        // 清空按钮
+        clearAllBtn.addEventListener('click', clearAll);
+
+        // 图片模态框关闭
+        closeModal.addEventListener('click', () => {
+            modal.classList.remove('active');
+            document.body.style.overflow = '';
+        });
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+        });
+
+        // ESC键关闭模态框
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                if (modal.classList.contains('active')) {
+                    modal.classList.remove('active');
+                    document.body.style.overflow = '';
+                }
+                if (passwordModal.classList.contains('active')) {
+                    hidePasswordModal();
+                }
+            }
+        });
+
+        // 初始化
+        updateStats();
+    </script>
+</body>
+</html>
